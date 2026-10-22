@@ -1,0 +1,27 @@
+name: ci
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: C++ core (build with sanitizers, run tests)
+        run: |
+          make -C core test
+          make -C core build/libtrackfuse.so
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: Lint
+        run: ruff check .
+      - name: Tests (includes C++ vs NumPy equivalence and statistical consistency)
+        run: pytest -q
+      - name: Demo and benchmark
+        run: |
+          python -m trackfuse demo
+          python -m trackfuse bench

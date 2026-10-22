@@ -1,0 +1,19 @@
+[project]
+name = "trackfuse"
+version = "0.1.0"
+description = "Sensor fusion for ground-vehicle localization: a C++ Extended Kalman Filter with a Python reference and simulator"
+requires-python = ">=3.11"
+dependencies = ["numpy>=1.26"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.5", "matplotlib>=3.8"]
+
+[tool.setuptools]
+packages = ["trackfuse"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
