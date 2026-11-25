@@ -1,5 +1,5 @@
 """Command line: `python -m trackfuse demo` (accuracy table, optional plot), `bench`, `animate` (a short clip)
-or `sweep` (many random drives)."""
+`sweep` (many random drives) or `stress` (sensor errors the filter does not model)."""
 
 from __future__ import annotations
 
@@ -98,11 +98,21 @@ def main() -> None:
     w = sub.add_parser("sweep", help="many random drives: error against GPS noise and against outage length")
     w.add_argument("--runs", type=int, default=50, help="random drives per point")
     w.add_argument("--plot", default=None, help="write the chart to this PNG path")
+    x = sub.add_parser("stress", help="sensor errors the filter does not model, and what each one costs")
+    x.add_argument("--runs", type=int, default=50, help="random drives per case")
+    x.add_argument("--plot", default=None, help="write the chart to this PNG path")
     args = ap.parse_args()
     if args.cmd == "demo":
         demo(args.plot)
     elif args.cmd == "bench":
         bench(args.duration, args.repeats)
+    elif args.cmd == "stress":
+        from . import stress
+
+        results = stress.measure(runs=args.runs)
+        print(stress.table(results))
+        if args.plot:
+            print(f"wrote {stress.plot(results, args.plot)}")
     elif args.cmd == "sweep":
         from . import sweep
 
