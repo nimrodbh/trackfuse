@@ -1,5 +1,5 @@
 """Command line: `python -m trackfuse demo` (accuracy table, optional plot), `bench`, `animate` (a short clip)
-`sweep` (many random drives) or `stress` (sensor errors the filter does not model)."""
+`sweep` (many random drives), `stress` (sensor errors the filter does not model) or `real` (recorded drives)."""
 
 from __future__ import annotations
 
@@ -101,11 +101,17 @@ def main() -> None:
     x = sub.add_parser("stress", help="sensor errors the filter does not model, and what each one costs")
     x.add_argument("--runs", type=int, default=50, help="random drives per case")
     x.add_argument("--plot", default=None, help="write the chart to this PNG path")
+    r = sub.add_parser("real", help="recorded drives from the smartLoc dataset (trackfuse/real.py says where to get them)")
+    r.add_argument("folders", nargs="+", help="one unpacked scenario folder each")
     args = ap.parse_args()
     if args.cmd == "demo":
         demo(args.plot)
     elif args.cmd == "bench":
         bench(args.duration, args.repeats)
+    elif args.cmd == "real":
+        from . import real
+
+        print(real.report(args.folders))
     elif args.cmd == "stress":
         from . import stress
 
