@@ -2,7 +2,15 @@
 
 Sensor fusion for a ground vehicle: an Extended Kalman Filter in C++ that combines a noisy IMU (acceleration and yaw rate), 1 Hz GPS and range-bearing observations of known landmarks into one position, heading and speed estimate. A simulator generates the drive, a NumPy reference implements the same filter, and the tests make the C++ prove itself against it.
 
-![Figure-eight drive: truth, dead reckoning, GPS fixes and EKF estimate](docs/trajectory.png)
+![One 80 second drive, followed from above: GPS fixes scatter by meters, motion sensors alone drift, the fused estimate stays on the road](docs/drive.gif)
+
+The clip is the filter's real output on one simulated 80 second drive, not an illustration, and every number in it is computed from that run. It shows three things:
+
+1. **Normal driving.** GPS fixes land about 4.0 m from the car. Motion sensors alone drift (1.4 m over the drive). Fused, the estimate is 0.13 m off.
+2. **GPS lost for 20 seconds.** The landmarks hold the estimate at 0.13 m.
+3. **One GPS fix 208 m from the truth.** The filter refuses it (a chi-square gate on how unlikely the measurement is).
+
+An honest note on the third: with landmarks in view the filter is already sure where it is, so even with the gate off that fix would move the estimate by only 0.11 m. With GPS as the only correction it would move it by 16.6 m. The gate earns its place when GPS is all you have, which is how `test_gating_rejects_gps_outliers` tests it.
 
 ## What is in here
 
@@ -14,7 +22,9 @@ Sensor fusion for a ground vehicle: an Extended Kalman Filter in C++ that combin
 | `trackfuse/sim.py` | Generates a figure-eight drive with 50 Hz IMU, 1 Hz GPS (3 m noise) and 5 Hz landmark observations, with optional GPS outages and bad GPS fixes. |
 | `trackfuse/pyekf.py` | The same filter in NumPy, written for clarity. |
 | `trackfuse/native.py` | ctypes binding to the C++ library. |
+| `trackfuse/animate.py` | Renders a drive as a clip (GIF or MP4) or one still frame. It replays the simulator through the filter and draws what came out. |
 | `tests/test_filter.py` | Equivalence, accuracy, consistency, outage and outlier tests (below). |
+| `tests/test_animate.py` | The clip's own claims: no GPS during the outage, the bad fix refused, the captions quoting the run. |
 
 ## Run it
 
@@ -24,6 +34,8 @@ make -C core build/libtrackfuse.so
 pip install -e ".[dev]"
 pytest -q
 python -m trackfuse demo --plot docs/trajectory.png
+python -m trackfuse animate docs/drive.gif --width 720 --fps 12 --seconds 16   # the clip above
+python -m trackfuse animate drive.mp4            # full size, needs ffmpeg
 python -m trackfuse bench
 # or: docker build -t trackfuse . && docker run --rm trackfuse
 ```
@@ -37,6 +49,8 @@ One simulated 80 second drive (seed 1), position RMSE against the true path:
 | Raw GPS fixes | 4.04 m |
 | Dead reckoning (IMU only) | 1.27 m |
 | EKF: IMU + GPS + landmarks | 0.13 m |
+
+![The same drive in one picture: truth, dead reckoning, GPS fixes and the filter's estimate](docs/trajectory.png)
 
 Dead reckoning drifts: on a 300 second drive it reaches 5.4 m, past the raw GPS error. With GPS cut for 20 seconds in a 60 second drive, the filter keeps 0.12 m error through the outage thanks to the landmarks, and 0.84 m if the landmarks are removed too.
 
