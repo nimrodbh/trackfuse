@@ -1,4 +1,5 @@
-"""Command line: `python -m trackfuse demo` (accuracy table, optional plot), `bench`, or `animate` (a short clip)."""
+"""Command line: `python -m trackfuse demo` (accuracy table, optional plot), `bench`, `animate` (a short clip)
+or `sweep` (many random drives)."""
 
 from __future__ import annotations
 
@@ -94,11 +95,21 @@ def main() -> None:
     a.add_argument("--fps", type=int, default=30)
     a.add_argument("--width", type=int, default=1920, help="in pixels; the height follows (16:9)")
     a.add_argument("--at", type=float, default=None, help="for a .png: the moment of the drive, in seconds")
+    w = sub.add_parser("sweep", help="many random drives: error against GPS noise and against outage length")
+    w.add_argument("--runs", type=int, default=50, help="random drives per point")
+    w.add_argument("--plot", default=None, help="write the chart to this PNG path")
     args = ap.parse_args()
     if args.cmd == "demo":
         demo(args.plot)
     elif args.cmd == "bench":
         bench(args.duration, args.repeats)
+    elif args.cmd == "sweep":
+        from . import sweep
+
+        noise, outage = sweep.gps_noise_sweep(runs=args.runs), sweep.outage_sweep(runs=args.runs)
+        print(sweep.table(noise, outage))
+        if args.plot:
+            print(f"wrote {sweep.plot(noise, outage, args.plot)}")
     else:
         from . import animate
 
