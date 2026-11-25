@@ -1,4 +1,4 @@
-"""Command line: `python -m trackfuse demo` (plot + accuracy table) or `python -m trackfuse bench`."""
+"""Command line: `python -m trackfuse demo` (accuracy table, optional plot), `bench`, or `animate` (a short clip)."""
 
 from __future__ import annotations
 
@@ -88,11 +88,21 @@ def main() -> None:
     b = sub.add_parser("bench")
     b.add_argument("--duration", type=float, default=300.0)
     b.add_argument("--repeats", type=int, default=5)
+    a = sub.add_parser("animate", help="render the drive as a clip (.gif or .mp4) or one still frame (.png)")
+    a.add_argument("out", help="where to write it; the ending picks the format")
+    a.add_argument("--seconds", type=float, default=22.0, help="length of the clip (the drive itself is 80 s)")
+    a.add_argument("--fps", type=int, default=30)
+    a.add_argument("--width", type=int, default=1920, help="in pixels; the height follows (16:9)")
+    a.add_argument("--at", type=float, default=None, help="for a .png: the moment of the drive, in seconds")
     args = ap.parse_args()
     if args.cmd == "demo":
         demo(args.plot)
-    else:
+    elif args.cmd == "bench":
         bench(args.duration, args.repeats)
+    else:
+        from . import animate
+
+        print(f"wrote {animate.render(args.out, seconds=args.seconds, fps=args.fps, width=args.width, at=args.at)}")
 
 
 if __name__ == "__main__":
