@@ -26,6 +26,7 @@ An honest note on the third: with landmarks in view the filter is already sure w
 | `tests/test_filter.py` | Equivalence, accuracy, consistency, outage and outlier tests (below). |
 | `tests/test_animate.py` | The clip's own claims: no GPS during the outage, the bad fix refused, the captions quoting the run. |
 | `trackfuse/sweep.py`, `tests/test_sweep.py` | Many random drives per condition: error against GPS noise and against the length of a GPS outage. |
+| `trackfuse/stress.py`, `tests/test_stress.py` | Sensor errors the filter does not model (biases, side slip, GPS errors that linger), and what each one costs. |
 
 ## Run it
 
@@ -38,6 +39,7 @@ python -m trackfuse demo --plot docs/trajectory.png
 python -m trackfuse animate docs/drive.gif --width 720 --fps 12 --seconds 16   # the clip above
 python -m trackfuse animate drive.mp4            # full size, needs ffmpeg
 python -m trackfuse sweep --plot docs/robustness.png   # 50 random drives per point (about 15 seconds)
+python -m trackfuse stress --plot docs/stress.png      # sensor errors the filter does not model
 python -m trackfuse bench
 # or: docker build -t trackfuse . && docker run --rm trackfuse
 ```
@@ -87,6 +89,28 @@ What it says, in medians:
 - **GPS and motion sensors alone still earn their keep.** Fusing cuts the error to about a third of raw GPS at 3 m of noise and to about a sixth at 12 m. A real car rarely has surveyed landmarks, so this is the honest baseline for the road.
 - **The outage column is the worst moment, not the last one.** On a figure-eight a heading error pushes the estimate away and then partly back as the road curves, so the error at the end of an outage rises and falls with the geometry.
 
+## When the sensors lie
+
+The standard simulator errs exactly the way the filter assumes: white noise on every sensor. That is the fair test of the math, and a kind one. Real sensors also lie in ways the filter knows nothing about. `python -m trackfuse stress` switches four such effects on and measures each over 50 random drives: a gyro that reads 0.5 degrees per second too high, an accelerometer that reads 0.1 m/s^2 too high, about a degree of side slip in turns, and GPS errors that fade over 30 seconds, so a few fixes do not average them out.
+
+![Median position error per unmodeled effect, for the filter as built and loosened, with GPS alone for comparison](docs/stress.png)
+
+Median position error over the drive ("loose" is the filter told that its motion sensors are ten times noisier than specified):
+
+| Effect | GPS alone | GPS + motion sensors, as built | loose | + landmarks, as built | loose |
+|---|---|---|---|---|---|
+| None (as the filter assumes) | 4.30 m | 1.35 m | 2.13 m | 0.13 m | 0.20 m |
+| Gyro bias | 4.30 m | 9.12 m | 2.75 m | 0.48 m | 0.20 m |
+| Accelerometer bias | 4.30 m | 7.43 m | 2.35 m | 0.49 m | 0.21 m |
+| Side slip | 4.24 m | 1.37 m | 2.12 m | 0.41 m | 0.49 m |
+| GPS errors linger | 3.98 m | 3.01 m | 3.99 m | 0.13 m | 0.20 m |
+| All four | 4.16 m | 12.11 m | 4.66 m | 0.71 m | 0.49 m |
+
+- **A bias breaks the filter as built.** With no landmarks, a small constant gyro bias takes it from 1.35 m to 9.12 m, worse than GPS alone (4.30 m). The filter was told its motion sensors have only white noise, so it trusts them too much and holds on to a wrong heading. Its own uncertainty gives it away: the consistency score (NEES, about 4 when honest) reads 341.
+- **Loosening is the cheap remedy.** Told that its motion sensors are ten times noisier than specified, the filter leans on its measurements: 2.75 m with the gyro bias, at the price of 2.13 m in place of 1.35 m when nothing is wrong.
+- **It is not the real fix.** With all four effects, loosening only gets back to about GPS level (4.66 m against 4.16 m). The proper remedy is to estimate the two biases as part of the state and to model GPS errors that linger. That is the next step, and it is what a real driving log will demand.
+- **Landmarks hide the problem.** With landmarks in view even the worst case stays under a meter, which is why the headline number alone would be flattering.
+
 ## How the C++ is trusted
 
 - **Two implementations, one test.** The NumPy reference and the C++ must agree on state and covariance to 1e-9 on several random drives, including runs with gated outliers.
@@ -102,6 +126,7 @@ What it says, in medians:
 
 ## Not done yet
 
+- Gyro and accelerometer bias as part of the state, and a model for GPS errors that linger. `stress` measures this as the main weakness today.
 - Real sensor logs instead of simulated ones.
 - Unknown landmark positions (SLAM) and a lateral/longitudinal vehicle model.
 - An Unscented Kalman Filter for comparison.
