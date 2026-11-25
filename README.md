@@ -27,6 +27,7 @@ An honest note on the third: with landmarks in view the filter is already sure w
 | `tests/test_animate.py` | The clip's own claims: no GPS during the outage, the bad fix refused, the captions quoting the run. |
 | `trackfuse/sweep.py`, `tests/test_sweep.py` | Many random drives per condition: error against GPS noise and against the length of a GPS outage. |
 | `trackfuse/stress.py`, `tests/test_stress.py` | Sensor errors the filter does not model (biases, side slip, GPS errors that linger), and what each one costs. |
+| `trackfuse/real.py`, `tests/test_real.py` | Recorded drives from the smartLoc dataset through the same filter, and the standstill calibration of the yaw-rate sensor. |
 
 ## Run it
 
@@ -40,6 +41,7 @@ python -m trackfuse animate docs/drive.gif --width 720 --fps 12 --seconds 16   #
 python -m trackfuse animate drive.mp4            # full size, needs ffmpeg
 python -m trackfuse sweep --plot docs/robustness.png   # 50 random drives per point (about 15 seconds)
 python -m trackfuse stress --plot docs/stress.png      # sensor errors the filter does not model
+python -m trackfuse real data/smartloc/berlin1_potsdamer_platz   # a recorded drive (the data is not in the repo)
 python -m trackfuse bench
 # or: docker build -t trackfuse . && docker run --rm trackfuse
 ```
@@ -111,6 +113,26 @@ Median position error over the drive ("loose" is the filter told that its motion
 - **It is not the real fix.** With all four effects, loosening only gets back to about GPS level (4.66 m against 4.16 m). The proper remedy is to estimate the two biases as part of the state and to model GPS errors that linger. That is the next step, and it is what a real driving log will demand.
 - **Landmarks hide the problem.** With landmarks in view even the worst case stays under a meter, which is why the headline number alone would be flattering.
 
+## First contact with real data
+
+Four recorded city drives from the [smartLoc dataset](https://www.tu-chemnitz.de/projekt/smartLoc/gnss_dataset.html.en) (TU Chemnitz): a mass-market GPS receiver, the car's own yaw-rate and wheel-speed sensors, and a survey-grade reference for the truth. There are no landmarks on a real street, so this is the GPS + motion sensors case. Run it with `python -m trackfuse real <scenario folders>`. The logs are not in this repository: they are published for academic use under CC BY-NC-SA 4.0, and `trackfuse/real.py` says where to get them.
+
+Position error against the reference (RMSE):
+
+| Drive | Length | Standing still | GPS alone | Motion sensors only | With standstill calibration | Fused |
+|---|---|---|---|---|---|---|
+| Berlin, Potsdamer Platz | 1.6 km | 1% | 5.89 m | 28.6 m | 29.2 m | 6.43 m |
+| Berlin, Gendarmenmarkt | 4.9 km | 16% | 6.37 m | 159.4 m | 85.8 m | 7.14 m |
+| Frankfurt, Main Tower | 2.9 km | 40% | 9.20 m | 475.1 m | 24.4 m | 9.48 m |
+| Frankfurt, Westend Tower | 2.3 km | 33% | 14.75 m | 142.7 m | 15.6 m | 16.74 m |
+
+The filter's two settings were chosen on the Berlin drives. The Frankfurt drives were not used for choosing anything.
+
+- **The filter as built does not beat the receiver's own fixes.** It ends 0.3 m to 2.0 m behind on every drive.
+- **Why.** The filter treats each GPS fix as a fresh, independent measurement. In a city it is not: five seconds later an error is still mostly the same one (its correlation with itself is 0.82 to 0.99), and the receiver claims about 1 m of accuracy while it is 6 m to 15 m off. A fix is also already the output of the receiver's own filter, so there is little left to smooth. The stress test above predicted this case ("GPS errors linger"): there, too, the filter only got back to about GPS level.
+- **What already works on a real car.** A car whose wheels are not turning is not turning either, so what its yaw-rate sensor reads during a long stop is that sensor's bias. Using it cuts the drift of the motion sensors alone from 475 m to 24 m on the drive with the most stops, and on the drive with the worst GPS it leaves them about as good as the GPS (15.6 m against 14.75 m). A short stop tells nothing: there the readings scatter several times wider than the bias, so only stops longer than three seconds count.
+- **What it needs next.** Treat the GPS error as a slowly changing offset and not as fresh noise, estimate the yaw-rate bias while moving too, and after that work from the raw satellite measurements, which the dataset also contains.
+
 ## How the C++ is trusted
 
 - **Two implementations, one test.** The NumPy reference and the C++ must agree on state and covariance to 1e-9 on several random drives, including runs with gated outliers.
@@ -127,6 +149,6 @@ Median position error over the drive ("loose" is the filter told that its motion
 ## Not done yet
 
 - Gyro and accelerometer bias as part of the state, and a model for GPS errors that linger. `stress` measures this as the main weakness today.
-- Real sensor logs instead of simulated ones.
+- Beating the receiver's own fixes on real drives. The first attempt is in "First contact with real data".
 - Unknown landmark positions (SLAM) and a lateral/longitudinal vehicle model.
 - An Unscented Kalman Filter for comparison.
