@@ -25,6 +25,7 @@ An honest note on the third: with landmarks in view the filter is already sure w
 | `trackfuse/animate.py` | Renders a drive as a clip (GIF or MP4) or one still frame. It replays the simulator through the filter and draws what came out. |
 | `tests/test_filter.py` | Equivalence, accuracy, consistency, outage and outlier tests (below). |
 | `tests/test_animate.py` | The clip's own claims: no GPS during the outage, the bad fix refused, the captions quoting the run. |
+| `trackfuse/sweep.py`, `tests/test_sweep.py` | Many random drives per condition: error against GPS noise and against the length of a GPS outage. |
 
 ## Run it
 
@@ -36,6 +37,7 @@ pytest -q
 python -m trackfuse demo --plot docs/trajectory.png
 python -m trackfuse animate docs/drive.gif --width 720 --fps 12 --seconds 16   # the clip above
 python -m trackfuse animate drive.mp4            # full size, needs ffmpeg
+python -m trackfuse sweep --plot docs/robustness.png   # 50 random drives per point (about 15 seconds)
 python -m trackfuse bench
 # or: docker build -t trackfuse . && docker run --rm trackfuse
 ```
@@ -62,6 +64,28 @@ Speed, on 300 seconds of the same scenario (16,861 events):
 | C++ through ctypes | 0.7 ms | 24 million |
 
 About 250x. This is a loop of tiny 4x4 matrix operations, where NumPy's per-call overhead dominates, so the gap says more about Python overhead than about C++ being a magic wand. The C++ number is the useful one: far above any real sensor rate.
+
+## Not one lucky run
+
+One good drive proves little: the seed may be lucky. `python -m trackfuse sweep` repeats the drive 50 times per point with fresh random noise, and reports the median and the spread.
+
+![Position error against GPS noise, and worst error against the length of a GPS outage, over 50 random drives per point](docs/robustness.png)
+
+What it says, in medians:
+
+| GPS noise | GPS alone | GPS + motion sensors | + landmarks |
+|---|---|---|---|
+| 3 m | 4.30 m | 1.35 m | 0.13 m |
+| 12 m | 17.20 m | 2.77 m | 0.13 m |
+
+| Time without GPS | Worst error, motion sensors only | Worst error, with landmarks |
+|---|---|---|
+| 20 s | 2.50 m | 0.26 m |
+| 60 s | 3.29 m | 0.32 m |
+
+- **The centimeter-level result belongs to the landmarks.** With them in view the estimate stays at 0.13 m whatever the GPS does.
+- **GPS and motion sensors alone still earn their keep.** Fusing cuts the error to about a third of raw GPS at 3 m of noise and to about a sixth at 12 m. A real car rarely has surveyed landmarks, so this is the honest baseline for the road.
+- **The outage column is the worst moment, not the last one.** On a figure-eight a heading error pushes the estimate away and then partly back as the road curves, so the error at the end of an outage rises and falls with the geometry.
 
 ## How the C++ is trusted
 
